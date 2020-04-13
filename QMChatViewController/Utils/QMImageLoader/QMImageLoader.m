@@ -8,6 +8,7 @@
 
 #import "QMImageLoader.h"
 #import <Quickblox/Quickblox.h>
+#import <SDWebImage.h>
 
 @interface QMWebImageCombinedOperation : NSObject <SDWebImageOperation>
 
@@ -194,7 +195,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
             qmCache = [[SDImageCache alloc] initWithNamespace:@"default"];
         }
         
-        qmCache.maxMemoryCost = 15 * 1024 * 1024;
+        qmCache.config.maxMemoryCost = 15 * 1024 * 1024;
         
         SDWebImageDownloader *qmDownloader = [SDWebImageDownloader sharedDownloader];
         
@@ -204,10 +205,10 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
     return _loader;
 }
 
-- (instancetype)initWithCache:(SDImageCache *)cache
+- (instancetype)initWithCache:(id<SDImageCache>)cache
                    downloader:(SDWebImageDownloader *)downloader {
     
-    self = [super initWithCache:cache downloader:downloader];
+    self = [super initWithCache:cache loader:downloader];
     if (self) {
         _runningOperations = [NSMutableDictionary dictionary];
     }
@@ -226,7 +227,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
 - (id <SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                        transform:(QMImageTransform *)transform
                                          options:(SDWebImageOptions)options
-                                        progress:(SDWebImageDownloaderProgressBlock)progressBlock
+                                        progress:(SDImageLoaderProgressBlock)progressBlock
                                        completed:(QMWebImageCompletionWithFinishedBlock)completedBlock {
     
     return [self downloadImageWithURL:url
@@ -241,7 +242,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                                            token:(NSString *)token
                                        transform:(QMImageTransform *)transform
                                          options:(SDWebImageOptions)options
-                                        progress:(SDWebImageDownloaderProgressBlock)progressBlock
+                                        progress:(SDImageLoaderProgressBlock)progressBlock
                                        completed:(QMWebImageCompletionWithFinishedBlock)completedBlock {
     
     // Invoking this method without a completedBlock is pointless
@@ -292,7 +293,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
     
     qm_cache_operation cacheOp = ^() {
         
-        return [weakSelf.imageCache queryCacheOperationForKey:key done:^(UIImage * _Nullable image,
+        return [(SDImageCache*)weakSelf.imageCache queryCacheOperationForKey:key done:^(UIImage * _Nullable image,
                                                                          NSData * _Nullable data,
                                                                          SDImageCacheType cacheType) {
             
@@ -317,7 +318,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                     // download if no image or requested to refresh anyway, and download allowed by delegate
                     SDWebImageDownloaderOptions downloaderOptions = 0;
                     if (options & SDWebImageLowPriority) downloaderOptions |= SDWebImageDownloaderLowPriority;
-                    if (options & SDWebImageProgressiveDownload) downloaderOptions |= SDWebImageDownloaderProgressiveDownload;
+                    if (options & SDWebImageProgressiveLoad) downloaderOptions |= SDWebImageDownloaderProgressiveLoad;
                     if (options & SDWebImageRefreshCached) downloaderOptions |= SDWebImageDownloaderUseNSURLCache;
                     if (options & SDWebImageContinueInBackground) downloaderOptions |= SDWebImageDownloaderContinueInBackground;
                     if (options & SDWebImageHandleCookies) downloaderOptions |= SDWebImageDownloaderHandleCookies;
@@ -325,7 +326,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                     if (options & SDWebImageHighPriority) downloaderOptions |= SDWebImageDownloaderHighPriority;
                     if (image && options & SDWebImageRefreshCached) {
                         // force progressive off if image already cached but forced refreshing
-                        downloaderOptions &= ~SDWebImageDownloaderProgressiveDownload;
+                        downloaderOptions &= ~SDWebImageDownloaderProgressiveLoad;
                         // ignore image read from NSURLCache if image if cached but force refreshing
                         downloaderOptions |= SDWebImageDownloaderIgnoreCachedResponse;
                     }
@@ -343,8 +344,9 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                     }
                     
                     SDWebImageDownloadToken * subOperation =
-                    [weakSelf.imageDownloader downloadImageWithURL:urlToDownload
+                    [weakSelf.imageLoader requestImageWithURL:urlToDownload
                                                            options:downloaderOptions
+                                                      context:nil
                                                           progress:progressBlock
                                                          completed:^(UIImage *downloadedImage,
                                                                      NSData *data,
@@ -387,9 +389,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                                      [weakSelf.failedURLs removeObject:url];
                                  }
                              }
-                             
-                             BOOL cacheOnDisk = !(options & SDWebImageCacheMemoryOnly);
-                             
+                                                          
                              if (options & SDWebImageRefreshCached && image && !downloadedImage) {
                                  // Image refresh hit the NSURLCache cache, do not call the completion block
                              }
@@ -414,7 +414,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                                          [weakSelf.imageCache storeImage:downloadedImage
                                                                imageData:(imageWasTransformed ? nil : data)
                                                                   forKey:key
-                                                                  toDisk:cacheOnDisk
+                                                                  cacheType:SDImageCacheTypeDisk
                                                               completion:nil];
                                      }
                                      
@@ -439,7 +439,8 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                                      
                                      [weakSelf.imageCache storeImage:downloadedImage
                                                            imageData:data
-                                                              forKey:key toDisk:cacheOnDisk
+                                                              forKey:key
+                                                              cacheType:SDImageCacheTypeDisk
                                                           completion:nil];
                                  }
                                  
@@ -467,7 +468,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                         __weak __typeof(subOperation)weakSuboperation = subOperation;
                         weakOperation.cancelBlock = ^{
                             
-                            [weakSelf.imageDownloader cancel:weakSuboperation];
+                            [weakSuboperation cancel];
                             __strong __typeof(weakOperation) strongOperation = weakOperation;
                             [weakSelf safelyRemoveOperationFromRunning:strongOperation];
                         };
@@ -481,7 +482,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
                     
                     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0), ^{
                         
-                        UIImage *transformedImage = [weakSelf.imageCache imageFromDiskCacheForKey:transformKey];
+                        UIImage *transformedImage = [(SDImageCache*)weakSelf.imageCache imageFromDiskCacheForKey:transformKey];
                         
                         if (!transformedImage) {
                             
@@ -543,7 +544,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
     
     if (transform) {
         
-        [self.imageCache queryCacheOperationForKey:transformKey
+        [(SDImageCache*)self.imageCache queryCacheOperationForKey:transformKey
                                               done:^(UIImage * _Nullable tranformedImageFromCache,
                                                      NSData * _Nullable data,
                                                      SDImageCacheType cacheType)
@@ -575,7 +576,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
 
 - (UIImage *)originalImageWithURL:(NSURL *)url {
     
-    return [self.imageCache imageFromDiskCacheForKey:url.absoluteString];
+    return [(SDImageCache*)self.imageCache imageFromDiskCacheForKey:url.absoluteString];
 }
 
 - (UIImage *)imageManager:(SDWebImageManager *)imageManager
@@ -589,7 +590,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
         UIImage *transformedImage = [transform imageManager:imageManager
                                    transformDownloadedImage:image
                                                     withURL:imageURL];
-        [self.imageCache storeImage:transformedImage
+        [(SDImageCache*)self.imageCache storeImage:transformedImage
                           imageData:nil
                              forKey:transformKey
                              toDisk:YES
@@ -627,7 +628,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
     BOOL exists = NO;
     
     NSString *key = [self cacheKeyForURL:url];
-    NSString *path = [self.imageCache defaultCachePathForKey:key];
+    NSString *path = [(SDImageCache*)self.imageCache cachePathForKey:key];
     if (path) {
         exists = [[NSFileManager defaultManager] fileExistsAtPath:path];
     }
@@ -638,7 +639,7 @@ NSString *stringWithImageTransformType(QMImageTransformType transformType) {
 - (NSString *)pathForOriginalImageWithURL:(NSURL *)url {
     
     NSString *key = [self cacheKeyForURL:url];
-    NSString *path = [self.imageCache defaultCachePathForKey:key];
+    NSString *path = [(SDImageCache*)self.imageCache cachePathForKey:key];
     
     if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
         return path;

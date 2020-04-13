@@ -9,6 +9,7 @@
 #import "QMChatLocationSnapshotter.h"
 
 #import <MapKit/MapKit.h>
+#import <SDWebImage/SDImageCache.h>
 #import "QMImageLoader.h"
 
 static const CLLocationDegrees kQMMKCoordinateSpanDefaultValue = 250;
@@ -20,7 +21,7 @@ static NSString * const kQMChatLocationSnapshotCacheName = @"com.q-municate.chat
 + (void)snapshotForLocationCoordinate:(CLLocationCoordinate2D)locationCoordinate withSize:(CGSize)size key:(NSString *)key completion:(QMChatLocationSnapshotBlock)completion {
     NSParameterAssert(key);
     
-    UIImage *locationSnapshot = [QMImageLoader.instance.imageCache imageFromCacheForKey:key];
+    UIImage *locationSnapshot = [(SDImageCache*)QMImageLoader.instance.imageCache imageFromCacheForKey:key];
     
     if (locationSnapshot) {
         completion(locationSnapshot);
@@ -63,10 +64,10 @@ static NSString * const kQMChatLocationSnapshotCacheName = @"com.q-municate.chat
                   }
                   UIGraphicsEndImageContext();
                   
-                  [QMImageLoader.instance.imageCache storeImage:finalImage
-                                                         forKey:key
-                                                         toDisk:YES
-                                                     completion:nil];
+                  [(SDImageCache*)QMImageLoader.instance.imageCache storeImage:finalImage
+                                                                        forKey:key
+                                                                        toDisk:YES
+                                                                    completion:nil];
                   
                   dispatch_async(dispatch_get_main_queue(), ^{
                       

@@ -27,12 +27,14 @@ typedef NS_ENUM(NSUInteger, QMImageViewType) {
 
 @property (weak, nonatomic) id <QMImageViewDelegate> delegate;
 
+- (void)setImageWithImage:(UIImage*)image;
+
 - (void)setImageWithURL:(NSURL *)url;
 
 - (void)setImageWithURL:(NSURL *)url
             placeholder:(UIImage *)placehoder
                 options:(SDWebImageOptions)options
-               progress:(SDWebImageDownloaderProgressBlock)progress
+               progress:(SDImageLoaderProgressBlock)progress
          completedBlock:(SDExternalCompletionBlock)completedBlock;
 
 - (void)setImageWithURL:(NSURL *)url

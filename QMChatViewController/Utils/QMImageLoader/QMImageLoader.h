@@ -61,14 +61,14 @@ typedef void(^QMWebImageCompletionWithFinishedBlock)(UIImage *_Nullable image, U
 - (id<SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                        transform:(nullable QMImageTransform *)transform
                                          options:(SDWebImageOptions)options
-                                        progress:(_Nullable SDWebImageDownloaderProgressBlock)progressBlock
+                                        progress:(_Nullable SDImageLoaderProgressBlock)progressBlock
                                        completed:(QMWebImageCompletionWithFinishedBlock)completedBlock;
 
 - (id<SDWebImageOperation>)downloadImageWithURL:(NSURL *)url
                                            token:(nullable NSString *)token
                                        transform:(QMImageTransform *)transform
                                          options:(SDWebImageOptions)options
-                                        progress:(_Nullable SDWebImageDownloaderProgressBlock)progressBlock
+                                        progress:(_Nullable SDImageLoaderProgressBlock)progressBlock
                                        completed:(QMWebImageCompletionWithFinishedBlock)completedBlock;
 @end
 

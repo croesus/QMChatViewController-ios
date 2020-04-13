@@ -9,7 +9,7 @@
 Pod::Spec.new do |s|
 
     s.name = "QMChatViewController"
-    s.version = "0.6.6"
+    s.version = "0.6.7"
     s.summary = "An elegant ready-to-go chat view controller for iOS chat applications that use Quickblox communication backend."
 
     s.description = <<-DESC
@@ -32,7 +32,7 @@ Pod::Spec.new do |s|
     }
     s.platform = :ios, "9.0"
     s.source = {
-        :git => "https://github.com/QuickBlox/QMChatViewController-ios.git",
+        :git => "https://github.com/croesus/QMChatViewController-ios.git",
         :tag => "#{s.version}"
     }
     s.source_files = "QMChatViewController/QMChatViewController.{h,m}"
@@ -87,8 +87,10 @@ Pod::Spec.new do |s|
     s.dependency "TTTAttributedLabel"
     s.dependency "SDWebImage"
     s.dependency "FFCircularProgressView"
+    s.dependency "QuickBlox"
+    s.dependency "QMServices"
     s.xcconfig = {
-        "FRAMEWORK_SEARCH_PATHS" => "$(PODS_ROOT)/../../Framework $(PODS_ROOT)/../External"
+        "FRAMEWORK_SEARCH_PATHS" => "$(PODS_ROOT)/../../Framework $(PODS_ROOT)/../External $(PODS_ROOT)/QuickBlox $(PODS_ROOT)/QMServices"
     }
 
 end

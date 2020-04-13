@@ -12,6 +12,8 @@
 #import "UIImage+Cropper.h"
 #import "objc/runtime.h"
 #import "QMImageLoader.h"
+#import <SDWebImage/SDWebImage.h>
+
 
 @interface QMTextLayer : CALayer
 
@@ -172,13 +174,17 @@ static NSArray *qm_colors = nil;
 //MARK: - NSObject
 
 - (void)dealloc {
-    [self sd_cancelCurrentAnimationImagesLoad];
+    //[self sd_cancelCurrentAnimationImagesLoad];
 }
 
 //MARK: - Public interface
 
 - (UIImage *)originalImage {
     return self.image;
+}
+
+- (void)setImage:(UIImage *)image withKey:(NSString *)key {
+    [(SDImageCache*)([QMImageLoader instance].imageCache) storeImage:image forKey:key completion:nil];
 }
 
 - (void)setImageWithURL:(NSURL *)url {
@@ -188,6 +194,24 @@ static NSArray *qm_colors = nil;
                   options:(SDWebImageHighPriority | SDWebImageContinueInBackground | SDWebImageAllowInvalidSSLCertificates)
                  progress:nil
            completedBlock:nil];
+}
+
+- (QMImageTransform*)imageTransform
+{
+    CGSize targetSize = self.bounds.size;
+    QMImageTransformType type = self.imageViewType == QMImageViewTypeCircle ?  QMImageTransformTypeCircle : QMImageTransformTypeCustom;
+    QMImageTransform *transform = nil;
+    if (type == QMImageTransformTypeCircle) {
+        transform = [QMImageTransform transformWithType:type size:targetSize];
+    }
+    else if (type == QMImageTransformTypeCustom) {
+        
+        transform = [QMImageTransform transformWithSize:targetSize
+                                   customTransformBlock:^UIImage *(NSURL *imageURL, UIImage *originalImage) {
+                                       return [originalImage imageWithCornerRadius:4.0 targetSize:targetSize];
+                                   }];
+    }
+    return transform;
 }
 
 - (void)setImageWithURL:(NSURL *)url
@@ -214,24 +238,12 @@ static NSArray *qm_colors = nil;
     _url = url;
     
     [self sd_cancelImageLoadOperationWithKey:@"QMImageView"];
-    
-    CGSize targetSize = self.bounds.size;
-    QMImageTransformType type = self.imageViewType == QMImageViewTypeCircle ?  QMImageTransformTypeCircle : QMImageTransformTypeCustom;
-    QMImageTransform *transform;
-    if (type == QMImageTransformTypeCircle) {
-        transform = [QMImageTransform transformWithType:type size:targetSize];
-    }
-    else if (type == QMImageTransformTypeCustom) {
         
-        transform = [QMImageTransform transformWithSize:targetSize
-                                   customTransformBlock:^UIImage *(NSURL *imageURL, UIImage *originalImage) {
-                                       return [originalImage imageWithCornerRadius:4.0 targetSize:targetSize];
-                                   }];
-    }
-    
     self.image = nil;
     showPlaceholder();
     
+    QMImageTransform *transform = self.imageTransform;
+
     if (urlIsValid) {
         
         __weak __typeof(self)weakSelf = self;
@@ -287,25 +299,26 @@ static NSArray *qm_colors = nil;
 - (void)setImageWithURL:(NSURL *)url
             placeholder:(UIImage *)placehoder
                 options:(SDWebImageOptions)options
-               progress:(SDWebImageDownloaderProgressBlock)progress
+               progress:(SDImageLoaderProgressBlock)progress
          completedBlock:(SDExternalCompletionBlock)completedBlock  {
     
     BOOL urlIsValid = url &&url.scheme && url.host;
     
     _url = url;
     
-    [self sd_cancelCurrentAnimationImagesLoad];
+    //[self sd_cancelCurrentAnimationImagesLoad];
     
     self.image = placehoder;
     
     if (urlIsValid) {
-        
+        QMImageTransform *transform = self.imageTransform;
+
         __weak __typeof(self)weakSelf = self;
         
         id <SDWebImageOperation> operation =
         [[QMImageLoader instance]
          downloadImageWithURL:url
-         transform:nil
+         transform:transform
          options:options
          progress:nil
          completed:
@@ -343,6 +356,23 @@ static NSArray *qm_colors = nil;
                 completedBlock(nil, error, SDImageCacheTypeNone, url);
             }
         });
+    }
+}
+
+- (void)setImageWithImage:(UIImage*)image {
+    if(image == nil) {
+        self.image = nil;
+    } else {
+        QMImageTransform *transform = self.imageTransform;
+        __weak __typeof(self)weakSelf = self;
+        [transform applyTransformForImage:image completionBlock:^(UIImage *transformedImage) {
+            if (!weakSelf)
+                return;
+            if (transformedImage) {
+                weakSelf.image = transformedImage;
+                [weakSelf setNeedsLayout];
+            }
+        }];
     }
 }
 
